@@ -1,0 +1,2 @@
+.. automodule:: ELogSender
+    :members: ELogSender

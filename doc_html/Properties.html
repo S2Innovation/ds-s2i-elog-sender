@@ -1,0 +1,78 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<html>
+<head>
+<title> ELogSender Tango Class Properties </title>
+</head>
+<body text="Black" bgcolor="White" link="Blue" vlink="Purple" alink="Red">
+<br><br><br>
+<font size="+1"><u><b> ELogSender  Properties : </b></u></font>
+<br><br><br>
+<Table Border=2 Cellpadding=3 CELLSPACING=0>
+	<tr bgcolor="#CCCCFF" class="TableHeadingColor">
+	<td colspan=4> <font size=+1> <center><b> Class Properties </b></font></center></td>
+	<tr bgcolor="#CCCCFF" class="TableHeadingColor">
+		<td> <center><b> Name </b></center> </td>
+		<td> <center><b> Description </b></center> </td>
+		<td> <center><b> Type </b></center> </td>
+		<td> <center><b> Default Value </b></center> </td>
+	</tr>
+	<tr>
+		<td> MaxQueueSize </td>
+		<td> Defines limit of number of entries pending. If it is reached the entries are not accepted and special substitution string ` {%MaxQueueMessage%}` is set on the last entry waiting in a queue. </td>
+		<td> int </td>
+		<td> 10 <br> </td>
+	</tr>
+	<tr>
+		<td> MaxQueueMessage </td>
+		<td> Message to indicate that there may be missing entries. </td>
+		<td> String </td>
+		<td> There are {%NumberOfRejectedEntries%} entries skipped to avoid flooding. <br> </td>
+	</tr>
+	<tr>
+		<td> ArgumentsParsers </td>
+		<td> List of RegEx to parse an argument provided with the create_entry command.<Br>
+			Items of this property are applied to related items of the command DevVarStringArray argument (first item to the first item, second to second...).<Br>
+			If the regular expression contains named group (`(?P<group_name>...)`) this group is provided dynamically to be used in other properites as replacement of `{%group_name}` string.<Br>
+			See also the AttributeFields property. </td>
+		<td> String[] </td>
+		<td> none </td>
+	</tr>
+</table>
+<br><br><br>
+<Table Border=2 Cellpadding=3 CELLSPACING=0>
+	<tr bgcolor="#CCCCFF" class="TableHeadingColor">
+	<td colspan=4> <font size=+1> <center><b> Device Properties </b></font></center></td>
+	<tr bgcolor="#CCCCFF" class="TableHeadingColor">
+		<td> <center><b> Name </b></center> </td>
+		<td> <center><b> Description </b></center> </td>
+		<td> <center><b> Type </b></center> </td>
+		<td> <center><b> Default Value </b></center> </td>
+	</tr>
+	<tr>
+		<td> EntryAttributes </td>
+		<td> Attributes of the eLong entry formatted as: `name=``value```, where value<Br>
+			may contain `{%index%}`, `{%group_name%}`, `{%attribute_name%}` in its text.<Br>
+			These will be replaced dynamicaly with values  based on<Br>
+			an input argument create_entry, named group parsed and this device attributes (read just before sending message to server). </td>
+		<td> String </td>
+		<td> none </td>
+	</tr>
+	<tr>
+		<td> EntryMessage </td>
+		<td> Message to be logged. It may contain `{%index%}`, `{%group_name%}`, `{%attribute_name%}` in its text.<Br>
+			These will be replaced dynamicaly with values (valid on time of sending to eLog) based on<Br>
+			an input argument create_entry, named gropu parsed and this device attributes. </td>
+		<td> String </td>
+		<td> {%0} <br> </td>
+	</tr>
+	<tr>
+		<td> EntryTitle </td>
+		<td> Title of the entries. It may contain `{%index%}`, `{%group_name%}`, `{%attribute_name%}` in its text.<Br>
+			These will be replaced dynamicaly with values (valid on time of sending to eLog) based on<Br>
+			an input argument create_entry, named gropu parsed and this device attributes. </td>
+		<td> String </td>
+		<td> {%1} <br> </td>
+	</tr>
+</table>
+</body>
+</html>

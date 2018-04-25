@@ -39,8 +39,8 @@ class ELogSenderDeviceTestCase(DeviceTestCase):
     # PROTECTED REGION ID(ELogSender.test_additionnal_import) ENABLED START #
     # PROTECTED REGION END #    //  ELogSender.test_additionnal_import
     device = ELogSender
-    properties = {'EntryAttributes': '', 'EntryMessage': '{%0}', 'EntryTitle': '{%1}', 
-                  'MaxQueueSize': '10', 'MaxQueueMessage': 'There are {%NumberOfRejectedEntries%} entries skipped to avoid flooding.', 'ArgumentsParsers': '', 'ELogCommand': 'elog', }
+    properties = {'EntryAttributes': '', 'EntryMessage': '{%0%}', 'EntryTitle': '{%1%}', 'LogbookName': '', 
+                  'MaxQueueSize': '10', 'MaxQueueMessage': 'There are {%NumberOfRejectedEntries%} entries skipped to avoid flooding.', 'ArgumentsParsers': '', 'ELogCommand': 'elog', 'ELogHost': '', 'ELogPort': '80', 'ELogPath': 'logbook', 'ELogAdditionalArgs': '', }
     empty = None  # Should be []
 
     @classmethod

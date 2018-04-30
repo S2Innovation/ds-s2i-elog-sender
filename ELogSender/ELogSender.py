@@ -45,7 +45,7 @@ def substitute(message, substitutions=[ [], {} ], depth=1):
     substituted_message = message
 
     # substitute numbered substitutions
-    i=0
+    i = 0
     for value in substitutions[0]:
         substituted_message = substituted_message.replace("{%%%d%%}" % i, value)
         i += 1
@@ -301,9 +301,9 @@ class ELogSender(Device):
             elog_process = Popen(elog_command, stdin=PIPE)
             elog_process.communicate(input=elog_message)
 
-        # remove the message from the que
-        with self.lock:
-            self._entries_que.pop(0)
+            # remove the message from the que
+            with self.lock:
+                self._entries_que.pop(0)
 
         # PROTECTED REGION END #    //  ELogSender.send_entry
 

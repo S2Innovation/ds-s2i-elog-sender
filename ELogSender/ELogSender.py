@@ -94,7 +94,7 @@ class ELogSender(Device):
     )
 
     ELogPort = class_property(
-        dtype=('int',), default_value=80
+        dtype='int', default_value=80
     )
 
     ELogPath = class_property(
@@ -138,8 +138,7 @@ class ELogSender(Device):
     NumberOfRejectedEntries = attribute(
         dtype='uint',
         label="Rejected entries",
-        doc="Number of rejected entries (not accepted in queue). "
-            "This counter is reset when its value used to be logged into eLog.",
+        doc="Number of rejected entries (not accepted in queue). This counter is reset when its value used to be logged into eLog.",
     )
 
     TotalNumberOfRejectedEntries = attribute(
@@ -222,7 +221,7 @@ class ELogSender(Device):
                 })
                 # reset counter
                 self._number_of_rejected_entries = 0
-                self.set_state("RUNNING")
+                self.set_state(PyTango.DevState.RUNNING)
 
             else:
                 # the queue is full, increment counters
@@ -260,12 +259,13 @@ class ELogSender(Device):
                 entry = self._entries_que[0]
 
                 # pars arguments (find named groups)
-                for i in range(0, len(self.ArgumentsParsers)):
-                    # parsing
-                    mo = re.match(self.ArgumentsParsers[i],entry["arguments"][i])
-                    # updating substitutions with named groups
-                    if mo is not None:
-                        entry["substitutions"][1].update(mo.groupdict())
+                if self.ArgumentsParsers is not None:
+                    for i in range(0, len(self.ArgumentsParsers)):
+                        # parsing
+                        mo = re.match(self.ArgumentsParsers[i],entry["arguments"][i])
+                        # updating substitutions with named groups
+                        if mo is not None:
+                            entry["substitutions"][1].update(mo.groupdict())
 
                 # update substitutions with values from device attributes
                 entry["substitutions"][1].update({
@@ -276,7 +276,8 @@ class ELogSender(Device):
 
                 # elog command
                 elog_command = "%s -h %s -p %d -d %s -l %s" \
-                               % (self.ELogCommand, self.ELogHost, self.ELogPort, self.ELogPath, self.LogbookName)
+                               % (self.ELogCommand, self.ELogHost, self.ELogPort, self.ELogPath,
+                                  substitute(self.LogbookName, entry["substitutions"]))
 
                 # prepare entry attributes
                 command_attributes_part = '-a'
@@ -292,18 +293,24 @@ class ELogSender(Device):
                         )
 
                 if len(command_attributes_part) > 2:
-                    elog_command += ' ' + command_attributes_part + ' ' + self.ELogAdditionalArgs
+                    elog_command += ' ' + command_attributes_part
+                    if self.ELogAdditionalArgs is not None:
+                        elog_command += ' ' + self.ELogAdditionalArgs
+                    print elog_command
                     
                 elog_message = substitute(self.EntryMessage, entry["substitutions"], 2)
 
         # if there is entry to be sent it shell be sent:
         if len(elog_command) > 0:
+            print elog_command
             elog_process = Popen(elog_command, stdin=PIPE)
             elog_process.communicate(input=elog_message)
+            print elog_process.returncode()
+            print elog_process.stderr()
 
             # remove the message from the que
             with self.lock:
-                self._entries_que.pop(0)
+                self._entries_que.remove(entry)
 
         # PROTECTED REGION END #    //  ELogSender.send_entry
 

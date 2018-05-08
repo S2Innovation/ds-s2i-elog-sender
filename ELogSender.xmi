@@ -29,7 +29,7 @@
       <status abstract="false" inherited="false" concrete="true" concreteHere="true"/>
     </classProperties>
     <classProperties name="ELogPort" description="TCP port number on which the logbook is listening">
-      <type xsi:type="pogoDsl:IntVectorType"/>
+      <type xsi:type="pogoDsl:IntType"/>
       <status abstract="false" inherited="false" concrete="true" concreteHere="true"/>
       <DefaultPropValue>80</DefaultPropValue>
     </classProperties>

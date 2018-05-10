@@ -27,7 +27,8 @@ import re
 from threading import RLock
 from subprocess import PIPE, Popen
 
-def substitute(message, substitutions=[ [], {} ], depth=1):
+
+def substitute(message, substitutions=[[], {}], depth=1):
     """
     Substitute `{%x%}` items in the message with values provided by substitutions
     :param message: message to be substituted
@@ -39,7 +40,7 @@ def substitute(message, substitutions=[ [], {} ], depth=1):
 
     assert isinstance(message, str)
 
-    if depth<1:
+    if depth <1 :
         return message
 
     substituted_message = message
@@ -219,7 +220,7 @@ class ELogSender(Device):
                 # if there is space in queue - add information to it
                 self._entries_que.append({
                     "arguments": argin,
-                    "substitutions": [argin, {"MaxQueMessage": ''}]
+                    "substitutions": [argin, {"MaxQueueMessage": '', "n":'\n'}]
                 })
                 # reset counter
                 self._number_of_rejected_entries = 0
@@ -236,7 +237,7 @@ class ELogSender(Device):
                 # mark it at the last entry in the que
                 self._entries_que[-1]["substitutions"][1].update({
                     "NumberOfRejectedEntries": str(self._number_of_rejected_entries),
-                    "MaxQueMessage": substitute(
+                    "MaxQueueMessage": substitute(
                         str(self.MaxQueueMessage),
                         [ [], {
                             "NumberOfRejectedEntries": str(self._number_of_rejected_entries),
@@ -310,17 +311,20 @@ class ELogSender(Device):
 
                 elog_message = substitute(self.EntryMessage, entry["substitutions"], 2)
 
+
         # if there is entry to be sent it shell be sent:
         if len(elog_command_args) > 0:
             a = [self.ELogCommand, ] + elog_command_args
 
             elog_process = Popen(
                 a,
-                stdin=PIPE
+                stdin=PIPE,
+                stderr=PIPE,
+                stdout=PIPE
             )
-            elog_process.communicate(input=elog_message)
+            (elog_stdout, elog_stderr) = elog_process.communicate(input=elog_message)
 
-            if elog_process.returncode == 0:
+            if elog_process.returncode == 0 and elog_stdout.startswith('Message successfully transmitted'):
                 # remove the message from the que
                 with self.lock:
                     self._entries_que.remove(entry)
@@ -334,10 +338,7 @@ class ELogSender(Device):
                 with self.lock:
                     self.set_state(PyTango.DevState.FAULT)
                     self.set_status("Error with the elog command call:")
-                    self.append_status(elog_process.stderr)
-
-
-
+                    self.append_status(elog_stdout)
 
         # PROTECTED REGION END #    //  ELogSender.send_entry
 

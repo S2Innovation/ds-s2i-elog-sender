@@ -27,7 +27,8 @@ import re
 from threading import RLock
 from subprocess import PIPE, Popen
 
-def substitute(message, substitutions=[ [], {} ], depth=1):
+
+def substitute(message, substitutions=[[], {}], depth=1):
     """
     Substitute `{%x%}` items in the message with values provided by substitutions
     :param message: message to be substituted
@@ -39,7 +40,7 @@ def substitute(message, substitutions=[ [], {} ], depth=1):
 
     assert isinstance(message, str)
 
-    if depth<1:
+    if depth <1 :
         return message
 
     substituted_message = message
@@ -94,7 +95,7 @@ class ELogSender(Device):
     )
 
     ELogPort = class_property(
-        dtype=('int',), default_value=80
+        dtype='int', default_value=80
     )
 
     ELogPath = class_property(
@@ -138,13 +139,12 @@ class ELogSender(Device):
     NumberOfRejectedEntries = attribute(
         dtype='uint',
         label="Rejected entries",
-        doc="Number of rejected entries (not accepted in queue). "
-            "This counter is reset when its value used to be logged into eLog.",
+        doc="Number of rejected entries (not accepted in queue). This counter is reset when its value used to be logged into eLog.",
     )
 
     TotalNumberOfRejectedEntries = attribute(
         dtype='uint',
-        label="Rejected entries",
+        label="Rejected entries since devcie start",
         doc="Total number of rejected entries (not accepted in a queue) since device is started.",
     )
 
@@ -160,6 +160,8 @@ class ELogSender(Device):
         self._number_of_rejected_entries = 0
         self._total_number_of_rejected_entries = 0
         self.lock = RLock()
+        self.set_state(PyTango.DevState.STANDBY)
+        self.set_status('No entries in que.')
 
         # PROTECTED REGION END #    //  ELogSender.init_device
 
@@ -218,11 +220,14 @@ class ELogSender(Device):
                 # if there is space in queue - add information to it
                 self._entries_que.append({
                     "arguments": argin,
-                    "substitutions": [argin, {}]
+                    "substitutions": [argin, {"MaxQueueMessage": '', "n":'\n'}]
                 })
                 # reset counter
                 self._number_of_rejected_entries = 0
-                self.set_state("RUNNING")
+                if self.get_state() != PyTango.DevState.FAULT:
+                    self.set_state(PyTango.DevState.RUNNING)
+                    self.set_status('There are pending entries it the queue.')
+
 
             else:
                 # the queue is full, increment counters
@@ -232,13 +237,14 @@ class ELogSender(Device):
                 # mark it at the last entry in the que
                 self._entries_que[-1]["substitutions"][1].update({
                     "NumberOfRejectedEntries": str(self._number_of_rejected_entries),
-                    "MaxQueMessage": substitute(
+                    "MaxQueueMessage": substitute(
                         str(self.MaxQueueMessage),
                         [ [], {
                             "NumberOfRejectedEntries": str(self._number_of_rejected_entries),
                         }]
                     )
                 })
+
 
         # PROTECTED REGION END #    //  ELogSender.create_entry
 
@@ -251,7 +257,7 @@ class ELogSender(Device):
 
 
         # prepare command and message
-        elog_command = ''
+        elog_command_args = ''
         elog_message = ''
 
         with self.lock:
@@ -260,12 +266,13 @@ class ELogSender(Device):
                 entry = self._entries_que[0]
 
                 # pars arguments (find named groups)
-                for i in range(0, len(self.ArgumentsParsers)):
-                    # parsing
-                    mo = re.match(self.ArgumentsParsers[i],entry["arguments"][i])
-                    # updating substitutions with named groups
-                    if mo is not None:
-                        entry["substitutions"][1].update(mo.groupdict())
+                if self.ArgumentsParsers is not None:
+                    for i in range(0, len(self.ArgumentsParsers)):
+                        # parsing
+                        mo = re.match(self.ArgumentsParsers[i],entry["arguments"][i])
+                        # updating substitutions with named groups
+                        if mo is not None:
+                            entry["substitutions"][1].update(mo.groupdict())
 
                 # update substitutions with values from device attributes
                 entry["substitutions"][1].update({
@@ -275,35 +282,63 @@ class ELogSender(Device):
                 })
 
                 # elog command
-                elog_command = "%s -h %s -p %d -d %s -l %s" \
-                               % (self.ELogCommand, self.ELogHost, self.ELogPort, self.ELogPath, self.LogbookName)
+                elog_command_args = [
+                    '-h', self.ELogHost,
+                    '-p', str(self.ELogPort),
+                    '-l', substitute(self.LogbookName, entry["substitutions"])
+                ]
+
+                if self.ELogPath is not None and len(self.ELogPath) > 0:
+                    elog_command_args += ['-d', self.ELogPath]
 
                 # prepare entry attributes
-                command_attributes_part = '-a'
                 for attribute_line in self.EntryAttributes:
                     assert isinstance(attribute_line, str)
                     # parse the line
                     mo = re.match('(?P<attr_name>\w+)\s*=\s*(?P<attr_value>[^$]*)$',attribute_line)
                     # add attributes to command line
                     if mo is not None:
-                        command_attributes_part += ' "%s=%s"' % (
-                            mo.group('attr_name'),
-                            substitute(mo.group('attr_value'), entry["substitutions"], 2)
-                        )
+                        elog_command_args += [
+                            '-a',
+                            '%s=%s' % (
+                                mo.group('attr_name'),
+                                substitute(mo.group('attr_value'), entry["substitutions"], 2)
+                            )
+                        ]
 
-                if len(command_attributes_part) > 2:
-                    elog_command += ' ' + command_attributes_part + ' ' + self.ELogAdditionalArgs
-                    
+                if self.ELogAdditionalArgs is not None:
+                    elog_command_args += str(self.ELogAdditionalArgs).split()
+
                 elog_message = substitute(self.EntryMessage, entry["substitutions"], 2)
 
-        # if there is entry to be sent it shell be sent:
-        if len(elog_command) > 0:
-            elog_process = Popen(elog_command, stdin=PIPE)
-            elog_process.communicate(input=elog_message)
 
-            # remove the message from the que
-            with self.lock:
-                self._entries_que.pop(0)
+        # if there is entry to be sent it shell be sent:
+        if len(elog_command_args) > 0:
+            a = [self.ELogCommand, ] + elog_command_args
+
+            elog_process = Popen(
+                a,
+                stdin=PIPE,
+                stderr=PIPE,
+                stdout=PIPE
+            )
+            (elog_stdout, elog_stderr) = elog_process.communicate(input=elog_message)
+
+            if elog_process.returncode == 0 and elog_stdout.startswith('Message successfully transmitted'):
+                # remove the message from the que
+                with self.lock:
+                    self._entries_que.remove(entry)
+                    if len(self._entries_que) == 0:
+                        self.set_state(PyTango.DevState.STANDBY)
+                        self.set_status('No entries in the queue.')
+                    else:
+                        self.set_state(PyTango.DevState.RUNNING)
+                        self.set_status('There are pending entries it the queue.')
+            else:
+                with self.lock:
+                    self.set_state(PyTango.DevState.FAULT)
+                    self.set_status("Error with the elog command call:")
+                    self.append_status(elog_stdout)
 
         # PROTECTED REGION END #    //  ELogSender.send_entry
 

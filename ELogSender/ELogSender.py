@@ -143,7 +143,7 @@ class ELogSender(Device):
 
     TotalNumberOfRejectedEntries = attribute(
         dtype='uint',
-        label="Rejected entries",
+        label="Rejected entries since devcie start",
         doc="Total number of rejected entries (not accepted in a queue) since device is started.",
     )
 
@@ -159,6 +159,8 @@ class ELogSender(Device):
         self._number_of_rejected_entries = 0
         self._total_number_of_rejected_entries = 0
         self.lock = RLock()
+        self.set_state(PyTango.DevState.STANDBY)
+        self.set_status('No entries in que.')
 
         # PROTECTED REGION END #    //  ELogSender.init_device
 
@@ -217,11 +219,14 @@ class ELogSender(Device):
                 # if there is space in queue - add information to it
                 self._entries_que.append({
                     "arguments": argin,
-                    "substitutions": [argin, {}]
+                    "substitutions": [argin, {"MaxQueMessage": ''}]
                 })
                 # reset counter
                 self._number_of_rejected_entries = 0
-                self.set_state(PyTango.DevState.RUNNING)
+                if self.get_state() != PyTango.DevState.FAULT:
+                    self.set_state(PyTango.DevState.RUNNING)
+                    self.set_status('There are pending entries it the queue.')
+
 
             else:
                 # the queue is full, increment counters
@@ -239,6 +244,7 @@ class ELogSender(Device):
                     )
                 })
 
+
         # PROTECTED REGION END #    //  ELogSender.create_entry
 
     @command(
@@ -250,7 +256,7 @@ class ELogSender(Device):
 
 
         # prepare command and message
-        elog_command = ''
+        elog_command_args = ''
         elog_message = ''
 
         with self.lock:
@@ -275,42 +281,63 @@ class ELogSender(Device):
                 })
 
                 # elog command
-                elog_command = "%s -h %s -p %d -d %s -l %s" \
-                               % (self.ELogCommand, self.ELogHost, self.ELogPort, self.ELogPath,
-                                  substitute(self.LogbookName, entry["substitutions"]))
+                elog_command_args = [
+                    '-h', self.ELogHost,
+                    '-p', str(self.ELogPort),
+                    '-l', substitute(self.LogbookName, entry["substitutions"])
+                ]
+
+                if self.ELogPath is not None and len(self.ELogPath) > 0:
+                    elog_command_args += ['-d', self.ELogPath]
 
                 # prepare entry attributes
-                command_attributes_part = '-a'
                 for attribute_line in self.EntryAttributes:
                     assert isinstance(attribute_line, str)
                     # parse the line
                     mo = re.match('(?P<attr_name>\w+)\s*=\s*(?P<attr_value>[^$]*)$',attribute_line)
                     # add attributes to command line
                     if mo is not None:
-                        command_attributes_part += ' "%s=%s"' % (
-                            mo.group('attr_name'),
-                            substitute(mo.group('attr_value'), entry["substitutions"], 2)
-                        )
+                        elog_command_args += [
+                            '-a',
+                            '%s=%s' % (
+                                mo.group('attr_name'),
+                                substitute(mo.group('attr_value'), entry["substitutions"], 2)
+                            )
+                        ]
 
-                if len(command_attributes_part) > 2:
-                    elog_command += ' ' + command_attributes_part
-                    if self.ELogAdditionalArgs is not None:
-                        elog_command += ' ' + self.ELogAdditionalArgs
-                    print elog_command
-                    
+                if self.ELogAdditionalArgs is not None:
+                    elog_command_args += str(self.ELogAdditionalArgs).split()
+
                 elog_message = substitute(self.EntryMessage, entry["substitutions"], 2)
 
         # if there is entry to be sent it shell be sent:
-        if len(elog_command) > 0:
-            print elog_command
-            elog_process = Popen(elog_command, stdin=PIPE)
-            elog_process.communicate(input=elog_message)
-            print elog_process.returncode()
-            print elog_process.stderr()
+        if len(elog_command_args) > 0:
+            a = [self.ELogCommand, ] + elog_command_args
 
-            # remove the message from the que
-            with self.lock:
-                self._entries_que.remove(entry)
+            elog_process = Popen(
+                a,
+                stdin=PIPE
+            )
+            elog_process.communicate(input=elog_message)
+
+            if elog_process.returncode == 0:
+                # remove the message from the que
+                with self.lock:
+                    self._entries_que.remove(entry)
+                    if len(self._entries_que) == 0:
+                        self.set_state(PyTango.DevState.STANDBY)
+                        self.set_status('No entries in the queue.')
+                    else:
+                        self.set_state(PyTango.DevState.RUNNING)
+                        self.set_status('There are pending entries it the queue.')
+            else:
+                with self.lock:
+                    self.set_state(PyTango.DevState.FAULT)
+                    self.set_status("Error with the elog command call:")
+                    self.append_status(elog_process.stderr)
+
+
+
 
         # PROTECTED REGION END #    //  ELogSender.send_entry
 
